@@ -77,6 +77,7 @@ NRF52Bluetooth *nrf52Bluetooth = nullptr;
 #include "SX1268Interface.h"
 #include "SX1280Interface.h"
 #include "detect/LoRaRadioType.h"
+#include "WioE5Interface.h"
 
 #ifdef ARCH_STM32WL
 #include "STM32WLE5JCInterface.h"
@@ -213,6 +214,9 @@ static OSThread *powerFSMthread;
 static OSThread *ambientLightingThread;
 
 RadioInterface *rIf = NULL;
+#ifdef USE_WIOE5
+WioE5Interface *wIf = NULL;
+#endif
 
 /**
  * Some platforms (nrf52) might provide an alterate version that suppresses calling delay from sleep.
@@ -1097,6 +1101,22 @@ void setup()
     }
 #endif
 
+#if defined(USE_WIOE5)
+    if ((!rIf) && (config.lora.region != meshtastic_Config_LoRaConfig_RegionCode_LORA_24)) {
+//        rIf = new WioE5Interface(RadioLibHAL, 0, 0, 0, 0);
+        wIf = new WioE5Interface(RadioLibHAL, 0, 0, 0, 0);
+        rIf = wIf;
+        if (!rIf->init()) {
+            LOG_WARN("No WioE5 radio");
+            delete rIf;
+            rIf = NULL;
+        } else {
+            LOG_INFO("WioE5 init success");
+            radioType = WIOE5_RADIO;
+        }
+    }
+#endif
+
     // check if the radio chip matches the selected region
     if ((config.lora.region == meshtastic_Config_LoRaConfig_RegionCode_LORA_24) && (!rIf->wideLora())) {
         LOG_WARN("LoRa chip does not support 2.4GHz. Revert to unset");
@@ -1254,6 +1274,9 @@ void loop()
     }
 #endif
 
+#ifdef USE_WIOE5
+    wIf->loop();
+#endif
     service->loop();
 
     long delayMsec = mainController.runOrDelay();
