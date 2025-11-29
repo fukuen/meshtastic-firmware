@@ -22,11 +22,30 @@
 #define LORA_MOSI 23
 #define LORA_CS 5
 
-#define USE_RF95
-#define LORA_DIO0 36 // a No connect on the SX1262 module
+//#define USE_RF95
+//#define LORA_DIO0 36 // a No connect on the SX1262 module
+//#define LORA_RESET 26
+//#define LORA_DIO1 RADIOLIB_NC // Not really used
+//#define LORA_DIO2 RADIOLIB_NC // Not really used
+
+#define USE_SX1262
 #define LORA_RESET 26
-#define LORA_DIO1 RADIOLIB_NC // Not really used
-#define LORA_DIO2 RADIOLIB_NC // Not really used
+#define LORA_DIO1 36
+//#define LORA_DIO2 35
+
+#ifdef USE_SX1262
+#define SX126X_CS LORA_CS
+#define SX126X_DIO1 LORA_DIO1
+//#define SX126X_BUSY 2
+#define SX126X_BUSY -1
+#define SX126X_RESET LORA_RESET
+
+//  DIO2 controlls an antenna switch and the TCXO voltage is controlled by DIO3
+#define SX126X_DIO2_AS_RF_SWITCH
+//#define SX126X_RXEN 35
+//#define SX126X_TXEN RADIOLIB_NC
+#define SX126X_DIO3_TCXO_VOLTAGE 1.8
+#endif
 
 // This board has different GPS pins than all other boards
 #undef GPS_RX_PIN
