@@ -28,12 +28,12 @@ bool WioE5Interface::init()
     if (power > WIOE5_MAX_POWER) // This chip has lower power limits than some
         power = WIOE5_MAX_POWER;
 
-    limitPower();
+//    limitPower();
 
     int res = 0;
     _lora.init(SERIAL_TX, SERIAL_RX);
     _lora.setDeviceBaudRate(BR_115200);
-    _lora.Debug(lora_DEBUG);
+    _lora.Debug(lora_INFO);
     int tm = _lora.initP2PMode(getFreq(), _spreading_factor_t(sf), _band_width_t(bw), preambleLength, preambleLength, power);
 
     LOG_INFO("WioE5 init result %d", res);
@@ -42,8 +42,8 @@ bool WioE5Interface::init()
     LOG_INFO("Bandwidth set to %f", bw);
     LOG_INFO("Power output set to %d", power);
 
-    if (res == RADIOLIB_ERR_NONE)
-        startReceive(); // start receiving
+//    if (res == RADIOLIB_ERR_NONE)
+//        startReceive(); // start receiving
 
     return res == RADIOLIB_ERR_NONE;
 }
@@ -72,22 +72,26 @@ void WioE5Interface::disableInterrupt()
 
 bool WioE5Interface::isChannelActive()
 {
-    LOG_DEBUG("WioE5 isChannelActive");
-    return true;
+//    LOG_DEBUG("WioE5 isChannelActive");
+    return false;
 }
 
 bool WioE5Interface::isActivelyReceiving()
 {
-    LOG_DEBUG("WioE5 isActivelyReceiving");
-    return false;
+//    LOG_DEBUG("WioE5 isActivelyReceiving");
+    return (_lora.available() > 0);
 }
 
 void WioE5Interface::startReceive()
 {
-    LOG_DEBUG("WioE5 startReceive");
+//    LOG_DEBUG("WioE5 startReceive");
+    if (!isReceiving)
+    {
+        _lora.startReceive();
+    }
     RadioLibInterface::startReceive();
-    _lora.setDeviceWakeUp();
-    int tm = _lora.initP2PMode(getFreq(), _spreading_factor_t(sf), _band_width_t(bw), preambleLength, preambleLength, power);
+//    _lora.setDeviceWakeUp();
+//    int tm = _lora.initP2PMode(getFreq(), _spreading_factor_t(sf), _band_width_t(bw), preambleLength, preambleLength, power);
     return;
 }
 
@@ -100,7 +104,9 @@ void WioE5Interface::configHardwareForSend()
 
 void WioE5Interface::addReceiveMetadata(meshtastic_MeshPacket *mp)
 {
-    LOG_DEBUG("WioE5 addReceiveMetadata");
+//    LOG_DEBUG("WioE5 addReceiveMetadata");
+    mp->rx_snr = _lora.getSNR();
+    mp->rx_rssi = lround(_lora.getRSSI());
     return;
 }
 
@@ -114,12 +120,14 @@ void WioE5Interface::setStandby()
 
 void WioE5Interface::loop()
 {
-    short rssi = 0;
-//    length = _lora.receivePacketP2PMode((uint8_t *)&radioBuffer, 255, &rssi, 100);
-    length = _lora.receivePacket((char *)&radioBuffer, 255, &rssi, 100);
-    if (length > 0)
+    if (_lora.available() > 0)
     {
+        short rssi = 0;
+        length = _lora.receivePacketP2PMode((uint8_t *)&radioBuffer, 255, &rssi, 100);
         handleReceiveInterrupt();
+        startReceive();
+//        setTransmitDelay();
+
     }
 
     return;
@@ -142,12 +150,12 @@ bool WioE5Interface::startSend(meshtastic_MeshPacket *txp)
         if (!res) {
             LOG_ERROR("startTransmit failed");
             RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_RADIO_SPI_BUG);
-
-            // This send failed, but make sure to 'complete' it properly
-            completeSending();
-            powerMon->clearState(meshtastic_PowerMon_State_Lora_TXOn); // Transmitter off now
-            startReceive(); // Restart receive mode (because startTransmit failed to put us in xmit mode)
         }
+
+        // This send failed, but make sure to 'complete' it properly
+        completeSending();
+        powerMon->clearState(meshtastic_PowerMon_State_Lora_TXOn); // Transmitter off now
+        startReceive(); // Restart receive mode (because startTransmit failed to put us in xmit mode)
 
         return res == RADIOLIB_ERR_NONE;
     }
@@ -166,7 +174,9 @@ void WioE5Interface::handleReceiveInterrupt()
 
     isReceiving = false;
 
-    xmitMsec = getPacketTime(length);
+    size_t length = iface->getPacketLength();
+
+    uint32_t rxMsec = getPacketTime(length, true);
 
 #ifndef DISABLE_WELCOME_UNSET
     if (config.lora.region == meshtastic_Config_LoRaConfig_RegionCode_UNSET) {
