@@ -82,7 +82,9 @@ NRF52Bluetooth *nrf52Bluetooth = nullptr;
 #include "SX1268Interface.h"
 #include "SX1280Interface.h"
 #include "detect/LoRaRadioType.h"
+#ifdef USE_WIOE5
 #include "WioE5Interface.h"
+#endif
 
 #ifdef ARCH_STM32WL
 #include "STM32WLE5JCInterface.h"

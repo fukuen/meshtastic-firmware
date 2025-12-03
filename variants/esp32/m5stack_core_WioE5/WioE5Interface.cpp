@@ -3,7 +3,7 @@
 #include "PowerMon.h"
 #include "configuration.h"
 #include "error.h"
-#include <Lora-E5.h>
+#include <LoRa-E5.h>
 
 #ifndef WIOE5_MAX_POWER
 #define WIOE5_MAX_POWER 22
@@ -34,7 +34,8 @@ bool WioE5Interface::init()
     _lora.init(SERIAL_TX, SERIAL_RX);
     _lora.setDeviceBaudRate(BR_115200);
     _lora.Debug(lora_INFO);
-    int tm = _lora.initP2PMode(getFreq(), _spreading_factor_t(sf), _band_width_t(bw), preambleLength, preambleLength, power);
+    _lora.setDeviceLowPowerAutomode(false);
+    _lora.initP2PMode(getFreq(), _spreading_factor_t(sf), _band_width_t(bw), preambleLength * 2, preambleLength * 2, power);
 
     LOG_INFO("WioE5 init result %d", res);
 
@@ -122,8 +123,6 @@ void WioE5Interface::loop()
 {
     if (_lora.available() > 0)
     {
-        short rssi = 0;
-        length = _lora.receivePacketP2PMode((uint8_t *)&radioBuffer, 255, &rssi, 100);
         handleReceiveInterrupt();
         startReceive();
 //        setTransmitDelay();
@@ -146,14 +145,33 @@ bool WioE5Interface::startSend(meshtastic_MeshPacket *txp)
 
         size_t numbytes = beginSending(txp);
 
-        bool res = _lora.transferPacketP2PMode((uint8_t *)&radioBuffer, numbytes);
-        if (!res) {
+//        unsigned int res = _lora.transferPacketP2PMode((uint8_t *)&radioBuffer, numbytes);
+        unsigned int res = _lora.transferPacketP2PModeAndReceive((uint8_t *)&radioBuffer, numbytes);
+        isReceiving = true;
+        if (res == 0) {
             LOG_ERROR("startTransmit failed");
             RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_RADIO_SPI_BUG);
         }
 
         // This send failed, but make sure to 'complete' it properly
-        completeSending();
+//        completeSending();
+        auto p = sendingPacket;
+        sendingPacket = NULL;
+
+        if (p) {
+            // Packet has been sent, count it toward our TX airtime utilization.
+//            uint32_t xmitMsec = getPacketTime(p);
+            airTime->logAirtime(TX_LOG, res);
+
+            txGood++;
+            if (!isFromUs(p))
+                txRelay++;
+            printPacket("Completed sending", p);
+
+            // We are done sending that packet, release it
+            packetPool.release(p);
+        }
+
         powerMon->clearState(meshtastic_PowerMon_State_Lora_TXOn); // Transmitter off now
         startReceive(); // Restart receive mode (because startTransmit failed to put us in xmit mode)
 
@@ -163,8 +181,6 @@ bool WioE5Interface::startSend(meshtastic_MeshPacket *txp)
 
 void WioE5Interface::handleReceiveInterrupt()
 {
-    uint32_t xmitMsec;
-
     // when this is called, we should be in receive mode - if we are not, just jump out instead of bombing. Possible Race
     // Condition?
     if (!isReceiving) {
@@ -174,14 +190,15 @@ void WioE5Interface::handleReceiveInterrupt()
 
     isReceiving = false;
 
-    size_t length = iface->getPacketLength();
+    short rssi = 0;
+    length = _lora.receivePacketP2PMode((uint8_t *)&radioBuffer, 255, &rssi, 3000);
 
     uint32_t rxMsec = getPacketTime(length, true);
 
 #ifndef DISABLE_WELCOME_UNSET
     if (config.lora.region == meshtastic_Config_LoRaConfig_RegionCode_UNSET) {
         LOG_WARN("lora rx disabled: Region unset");
-        airTime->logAirtime(RX_ALL_LOG, xmitMsec);
+        airTime->logAirtime(RX_ALL_LOG, rxMsec);
         return;
     }
 #endif
@@ -193,7 +210,7 @@ void WioE5Interface::handleReceiveInterrupt()
     if (payloadLen < 0) {
         LOG_WARN("Ignore received packet too short");
         rxBad++;
-        airTime->logAirtime(RX_ALL_LOG, xmitMsec);
+        airTime->logAirtime(RX_ALL_LOG, rxMsec);
     } else {
         rxGood++;
         // altered packet with "from == 0" can do Remote Node Administration without permission
@@ -207,6 +224,7 @@ void WioE5Interface::handleReceiveInterrupt()
         // nodes.
         meshtastic_MeshPacket *mp = packetPool.allocZeroed();
 
+        // Keep the assigned fields in sync with src/mqtt/MQTT.cpp:onReceiveProto
         mp->from = radioBuffer.header.from;
         mp->to = radioBuffer.header.to;
         mp->id = radioBuffer.header.id;
@@ -216,6 +234,9 @@ void WioE5Interface::handleReceiveInterrupt()
         mp->hop_start = (radioBuffer.header.flags & PACKET_FLAGS_HOP_START_MASK) >> PACKET_FLAGS_HOP_START_SHIFT;
         mp->want_ack = !!(radioBuffer.header.flags & PACKET_FLAGS_WANT_ACK_MASK);
         mp->via_mqtt = !!(radioBuffer.header.flags & PACKET_FLAGS_VIA_MQTT_MASK);
+        // If hop_start is not set, next_hop and relay_node are invalid (firmware <2.3)
+        mp->next_hop = mp->hop_start == 0 ? NO_NEXT_HOP_PREFERENCE : radioBuffer.header.next_hop;
+        mp->relay_node = mp->hop_start == 0 ? NO_RELAY_NODE : radioBuffer.header.relay_node;
 
         addReceiveMetadata(mp);
 
@@ -227,7 +248,7 @@ void WioE5Interface::handleReceiveInterrupt()
 
         printPacket("Lora RX", mp);
 
-        airTime->logAirtime(RX_LOG, xmitMsec);
+        airTime->logAirtime(RX_LOG, rxMsec);
 
         deliverToReceiver(mp);
     }

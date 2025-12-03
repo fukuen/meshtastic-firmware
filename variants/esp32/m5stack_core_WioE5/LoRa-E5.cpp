@@ -1112,7 +1112,7 @@ unsigned int LoRaE5Class::initP2PMode(float frequency,
     time_cmd=+at_send_check_response(cmd,"LDRO",DEFAULT_TIMEWAIT,NULL);
     //set device test mode configuration
     cmd[0]='\0';//reset the string position
-    sprintf(cmd, "AT+TEST=RFCFG,%f,%d,%d,%d,%d,%d,OFF,OFF,OFF\r\n", frequency,
+    sprintf(cmd, "AT+TEST=RFCFG,%f,%d,%d,%d,%d,%d,ON,OFF,OFF\r\n", frequency,
             spreadingFactor, bandwidth, txPreamble, rxPreamble, power);
     time_cmd=+at_send_check_response(cmd,AT_NO_ACK,DEFAULT_TIMEWAIT,NULL);
     //set device test mode configuration
@@ -1122,8 +1122,8 @@ unsigned int LoRaE5Class::initP2PMode(float frequency,
     //allow the reception of messages
     cmd[0]='\0';//reset the string position
     sprintf(cmd, "AT+TEST=RXLRPKT\r\n");
-//    time_cmd=+at_send_check_response(cmd,"RXLRPKT",DEFAULT_TIMEWAIT,NULL);
-    time_cmd=+at_send_check_response(cmd,"RXLRPKT",DEFAULT_TIMEWAIT,NULL);
+//    time_cmd=+at_send_check_response(cmd,AT_NO_ACK,DEFAULT_TIMEWAIT,NULL);
+    time_cmd=+at_send_check_response(cmd,"RXLRPKT\r\n",DEFAULT_TIMEWAIT,NULL);
     return(time_cmd);
 }
 
@@ -1132,7 +1132,8 @@ unsigned int LoRaE5Class::startReceive() {
     //allow the reception of messages
     cmd[0]='\0';//reset the string position
     sprintf(cmd, "AT+TEST=RXLRPKT\r\n");
-    time_cmd=+at_send_check_response(cmd,"RXLRPKT",DEFAULT_TIMEWAIT,NULL);
+//    time_cmd=+at_send_check_response(cmd,AT_NO_ACK,DEFAULT_TIMEWAIT,NULL);
+    time_cmd=+at_send_check_response(cmd,"RXLRPKT\r\n",DEFAULT_TIMEWAIT,NULL);
     return(time_cmd);
 }
 
@@ -1146,7 +1147,7 @@ unsigned int LoRaE5Class::transferPacketP2PMode(char *buffer) {
     #endif
     cmd[0]='\0';//reset the string
     sprintf(cmd,"AT+TXLRSTR=\"%s\"\r\n",buffer);
-    time_ret=at_send_check_response(cmd,"DONE",DEFAULT_TIMEWAIT,NULL);
+    time_ret=at_send_check_response(cmd,"DONE",LONG_TIMEWAIT,NULL);
     return time_ret;
 }
 
@@ -1163,7 +1164,30 @@ unsigned int LoRaE5Class::transferPacketP2PMode(unsigned char *buffer,
     sprintf(cmd+strlen(cmd),"AT+TEST=TXLRPKT,\"");//name of the command
     for ( i = 0; i < length; i++) { sprintf(cmd+strlen(cmd), "%02x", buffer[i]);}//add the characters in hex format
     sprintf(cmd+strlen(cmd),"\"\r\n");//end of command
-    time_ret=at_send_check_response(cmd,"DONE",DEFAULT_TIMEWAIT,NULL);
+    time_ret=at_send_check_response(cmd,"DONE",LONG_TIMEWAIT,NULL);
+    return time_ret;    
+}
+
+unsigned int LoRaE5Class::transferPacketP2PModeAndReceive(unsigned char *buffer,
+                                         unsigned char length) {
+    int i;
+    unsigned int time_ret;
+    #ifdef COMMAND_PRINT_TO_USER
+     cmd[0]='\0';//reset the string
+     sprintf(cmd,"\r\nSending %i bytes to a another LoRa End Node",(int)length);
+     SerialUSB.print(cmd);
+    #endif
+    cmd[0]='\0';//reset the string size
+    sprintf(cmd+strlen(cmd),"AT+TEST=TXLRPKT,\"");//name of the command
+    for ( i = 0; i < length; i++) { sprintf(cmd+strlen(cmd), "%02x", buffer[i]);}//add the characters in hex format
+    sprintf(cmd+strlen(cmd),"\"\r\n");//end of command
+    time_ret=at_send_check_response(cmd,"DONE",LONG_TIMEWAIT,NULL);
+    //allow the reception of messages
+    cmd[0]='\0';//reset the string position
+    sprintf(cmd, "AT+TEST=RXLRPKT\r\n");
+//    time_cmd=+at_send_check_response(cmd,"RXLRPKT",DEFAULT_TIMEWAIT,NULL);
+//    time_ret=+at_send_check_response(cmd,AT_NO_ACK,DEFAULT_TIMEWAIT,NULL);
+    at_send_check_response(cmd,"RXLRPKT\r\n",DEFAULT_TIMEWAIT,NULL);
     return time_ret;    
 }
 
@@ -1180,6 +1204,12 @@ short LoRaE5Class::receivePacketP2PMode(unsigned char *buffer, short length,
 //    while (SerialLoRa.available() > 0){ ch = SerialLoRa.read();}//clean the read buffer
     //call to recieve packet during a time window time window
     int len = readBuffer(recv_buf,sizeof(recv_buf),timeout);
+    recv_buf[len] = 0;
+#ifdef COMMAND_PRINT_TO_USER
+    SerialUSB.print("\r\n");
+    SerialUSB.print(recv_buf);
+    SerialUSB.print("\n");
+#endif
 
     /*parse the content of the rx message to get information*/
     ptr = strstr(recv_buf, "LEN");
