@@ -158,7 +158,9 @@ class RadioLibInterface : public RadioInterface, protected concurrency::Notified
     /** Attempt to find a packet in the TxQueue. Returns true if the packet was found. */
     virtual bool findInTxQueue(NodeNum from, PacketId id) override;
 
+#if !defined(USE_WIOE5)
   private:
+#endif
     /** if we have something waiting to send, start a short (random) timer so we can come check for collision before actually
      * doing the transmit */
     void setTransmitDelay();

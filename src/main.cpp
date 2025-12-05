@@ -1622,9 +1622,6 @@ void loop()
     }
 #endif
 
-#ifdef USE_WIOE5
-    wIf->loop();
-#endif
     service->loop();
 #if !MESHTASTIC_EXCLUDE_INPUTBROKER && defined(HAS_FREE_RTOS) && !defined(ARCH_RP2040)
     if (inputBroker)

@@ -4,6 +4,7 @@
 #include "configuration.h"
 #include "error.h"
 #include <LoRa-E5.h>
+#include <Task.h>
 
 #ifndef WIOE5_MAX_POWER
 #define WIOE5_MAX_POWER 22
@@ -13,6 +14,62 @@
 
 LoRaE5Class _lora;
 size_t length;
+
+struct argsStruct
+{
+    void * wioE5Interface;
+    uint8_t * buffer;
+    size_t numbytes;
+};
+
+class Listener : public Task
+{
+  public:
+    void run(void *arg) override
+    {
+        WioE5Interface *wioE5Interface = static_cast<WioE5Interface*>(arg);
+        while (1)
+        {
+            if (wioE5Interface->isRcving())
+            {
+                if (_lora.available() > 0)
+                {
+                    wioE5Interface->handleReceiveInterrupt();
+                    wioE5Interface->startReceive();
+                    wioE5Interface->setTransmitDelay();
+
+                }
+            }
+            delay(10);
+        }
+    }
+};
+Listener _listener;
+
+class Sender : public Task
+{
+  public:
+    void run(void *arg) override
+    {
+        argsStruct *args = (argsStruct *)arg;
+        WioE5Interface *wioE5Interface = static_cast<WioE5Interface*>(args->wioE5Interface);
+        uint8_t *radioBuffer = args->buffer;
+        size_t numbytes = args->numbytes;
+        unsigned int res = _lora.transferPacketP2PModeAndReceive(radioBuffer, numbytes);
+        if (res == 0) {
+            LOG_ERROR("startTransmit failed, error=%d", res);
+            RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_RADIO_SPI_BUG);
+
+            wioE5Interface->handleTransmitInterrupt();
+            wioE5Interface->startReceive(); // Restart receive mode (because startTransmit failed to put us in xmit mode)
+        } else {
+            wioE5Interface->handleTransmitInterrupt();
+            wioE5Interface->startReceive();
+            wioE5Interface->setTransmitDelay();
+        }
+    }
+};
+Sender _sender;
 
 WioE5Interface::WioE5Interface(LockingArduinoHal *hal, RADIOLIB_PIN_TYPE cs, RADIOLIB_PIN_TYPE irq,
                                            RADIOLIB_PIN_TYPE rst, RADIOLIB_PIN_TYPE busy)
@@ -28,8 +85,6 @@ bool WioE5Interface::init()
     if (power > WIOE5_MAX_POWER) // This chip has lower power limits than some
         power = WIOE5_MAX_POWER;
 
-//    limitPower();
-
     int res = 0;
     _lora.init(SERIAL_TX, SERIAL_RX);
     _lora.setDeviceBaudRate(BR_115200);
@@ -43,8 +98,8 @@ bool WioE5Interface::init()
     LOG_INFO("Bandwidth set to %f", bw);
     LOG_INFO("Power output set to %d", power);
 
-//    if (res == RADIOLIB_ERR_NONE)
-//        startReceive(); // start receiving
+    _listener.setTaskName("ListenerTask");
+    _listener.start(this);
 
     return res == RADIOLIB_ERR_NONE;
 }
@@ -125,11 +180,16 @@ void WioE5Interface::loop()
     {
         handleReceiveInterrupt();
         startReceive();
-//        setTransmitDelay();
+        setTransmitDelay();
 
     }
 
     return;
+}
+
+bool WioE5Interface::isRcving()
+{
+    return isReceiving;
 }
 
 /** start an immediate transmit */
@@ -142,38 +202,26 @@ bool WioE5Interface::startSend(meshtastic_MeshPacket *txp)
         return false;
     } else {
         configHardwareForSend(); // must be after setStandby
+        isReceiving = false;
 
         size_t numbytes = beginSending(txp);
 
-//        unsigned int res = _lora.transferPacketP2PMode((uint8_t *)&radioBuffer, numbytes);
-        unsigned int res = _lora.transferPacketP2PModeAndReceive((uint8_t *)&radioBuffer, numbytes);
-        isReceiving = true;
-        if (res == 0) {
-            LOG_ERROR("startTransmit failed");
-            RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_RADIO_SPI_BUG);
-        }
+        // Must be done AFTER, starting transmit, because startTransmit clears (possibly stale) interrupt pending register
+        // bits
+        lastTxStart = millis();
+        printPacket("Started Tx", txp);
 
-        // This send failed, but make sure to 'complete' it properly
-//        completeSending();
-        auto p = sendingPacket;
-        sendingPacket = NULL;
+////        unsigned int res = _lora.transferPacketP2PMode((uint8_t *)&radioBuffer, numbytes);
+//        unsigned int res = _lora.transferPacketP2PModeAndReceive((uint8_t *)&radioBuffer, numbytes);
+        int res = RADIOLIB_ERR_NONE;
 
-        if (p) {
-            // Packet has been sent, count it toward our TX airtime utilization.
-//            uint32_t xmitMsec = getPacketTime(p);
-            airTime->logAirtime(TX_LOG, res);
+        argsStruct args;
+        args.wioE5Interface = this;
+        args.buffer = (uint8_t *)&radioBuffer;
+        args.numbytes = numbytes;
 
-            txGood++;
-            if (!isFromUs(p))
-                txRelay++;
-            printPacket("Completed sending", p);
-
-            // We are done sending that packet, release it
-            packetPool.release(p);
-        }
-
-        powerMon->clearState(meshtastic_PowerMon_State_Lora_TXOn); // Transmitter off now
-        startReceive(); // Restart receive mode (because startTransmit failed to put us in xmit mode)
+        _sender.setTaskName("SenderTask");
+        _sender.start(&args);
 
         return res == RADIOLIB_ERR_NONE;
     }

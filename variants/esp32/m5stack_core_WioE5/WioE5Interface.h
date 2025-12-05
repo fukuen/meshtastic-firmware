@@ -54,8 +54,10 @@ class WioE5Interface : public SX126xInterface<SX1262>
 
     void setStandby() override;
 
-    void loop();
+    uint32_t getPacketTime(uint32_t pl, bool received) override { return 50; }
 
+    void loop();
+    bool isRcving();
 
     bool startSend(meshtastic_MeshPacket *txp) override;
 
