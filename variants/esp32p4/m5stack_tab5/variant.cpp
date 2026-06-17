@@ -1,6 +1,8 @@
-#include "configuration.h"
-
+// pass 2 only
+#ifdef ESP32_ARDUINO_LIB_BUILDER
 #ifdef M5STACK_TAB5
+
+#include "configuration.h"
 
 #include "AudioBoard.h"
 #include <Wire.h>
@@ -90,4 +92,5 @@ void lateInitVariant()
     WiFi.setPins(SDIO2_CLK, SDIO2_CMD, SDIO2_D0, SDIO2_D1, SDIO2_D2, SDIO2_D3, SDIO2_RST);
 }
 
+#endif
 #endif
