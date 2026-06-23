@@ -762,7 +762,9 @@ void NimbleBluetooth::setup()
     LOG_INFO("Init the NimBLE bluetooth module");
 
     BLEDevice::init(getDeviceName());
+#if !defined(CONFIG_IDF_TARGET_ESP32P4)
     BLEDevice::setPower(ESP_PWR_LVL_P9);
+#endif
 
     int mtuResult = BLEDevice::setMTU(kPreferredBleMtu);
     if (mtuResult == 0) {
