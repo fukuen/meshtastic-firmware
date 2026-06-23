@@ -15,8 +15,8 @@ AudioBoard board(AudioDriverES8388, PinsAudioBoardES8388);
 
 static TwoWire *findBus()
 {
-    TwoWire *candidates[] = {&Wire1, &Wire};
-    for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); ++i)
+    TwoWire *candidates[] = {&Wire, &Wire1};
+    for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
     {
         candidates[i]->beginTransmission(PI4IO_ADDR);
         if (candidates[i]->endTransmission() == 0)
@@ -29,6 +29,9 @@ static TwoWire *findBus()
 
 void lateInitVariant()
 {
+    // TAB5 SDIO WiFi
+    WiFi.setPins(SDIO2_CLK, SDIO2_CMD, SDIO2_D0, SDIO2_D1, SDIO2_D2, SDIO2_D3, SDIO2_RST);
+
     TwoWire *bus = findBus();
     if (!bus)
     {
@@ -87,9 +90,6 @@ void lateInitVariant()
     es8388_write_reg(bus, 48, 0x21);
 
     LOG_INFO("ES8388 Audio initialized.");
-
-    // TAB5 SDIO WiFi
-    WiFi.setPins(SDIO2_CLK, SDIO2_CMD, SDIO2_D0, SDIO2_D1, SDIO2_D2, SDIO2_D3, SDIO2_RST);
 }
 
 #endif
