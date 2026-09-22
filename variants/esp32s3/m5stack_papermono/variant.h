@@ -21,12 +21,12 @@
 #define LORA_CS 41 // NSS
 
 #define USE_SX1262
-#define LORA_DIO0 5           // IRQ
+#define LORA_DIO0 -1
+#define LORA_DIO1 5           // IRQ
 #define LORA_RESET -1         // RESET
 #define LORA_RST -1           // RESET
 #define LORA_IRQ 5            // DIO0
 #define LORA_BUSY 21
-#define LORA_DIO1 RADIOLIB_NC // Not really used
 #define LORA_DIO2 RADIOLIB_NC // Not really used
 #define LORA_DIO3 RADIOLIB_NC
 
