@@ -110,4 +110,10 @@ void earlyInitVariant()
 #endif
 }
 
+void lateInitVariant()
+{
+  LOG_INFO("Frontlight test: ON");
+  pm.analogWrite(M5PM1_PWM_CH_0, 50);
+}
+
 #endif

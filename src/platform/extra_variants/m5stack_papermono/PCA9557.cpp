@@ -7,18 +7,10 @@ extern M5PM1 pm;
 
 void PCA9557::digitalWrite(uint8_t pin, uint8_t value)
 {
-    // E-Paper EN と Backlight のオン/オフを連動する
     if (pin == PCA_PIN_EINK_EN)
     {
-        ioe1.digitalWrite(M5IOE1_PIN_3, value);
-        if (value == LOW)
-        {
-            pm.analogWrite(M5PM1_PWM_CH_0, 0);
-        }
-        else
-        {
-            pm.analogWrite(M5PM1_PWM_CH_0, 10);
-        }
+        // フロントライトのみ制御。E-Ink 電源 (M5IOE1_PIN_3) には触れない
+        pm.analogWrite(M5PM1_PWM_CH_0, value == LOW ? 0 : 50);
     }
     else
     {
