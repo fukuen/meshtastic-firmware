@@ -10,7 +10,7 @@ void PCA9557::digitalWrite(uint8_t pin, uint8_t value)
     if (pin == PCA_PIN_EINK_EN)
     {
         // フロントライトのみ制御。E-Ink 電源 (M5IOE1_PIN_3) には触れない
-        pm.analogWrite(M5PM1_PWM_CH_0, value == LOW ? 0 : 50);
+        pm.analogWrite(M5PM1_PWM_CH_0, value == LOW ? 0 : 30);
     }
     else
     {

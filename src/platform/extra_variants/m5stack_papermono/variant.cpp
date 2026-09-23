@@ -11,6 +11,10 @@
 //#include <M5PM1.h>
 #include <PCA9557.h>
 
+#include "Observer.h"
+#include "Power.h"
+#include "PowerStatus.h"
+
 #define M5IOE1_ADDR 0x4F
 #define M5PM1_ADDR 0x6E
 #define IP2315_ADDR 0x75
@@ -42,6 +46,7 @@ void earlyInitVariant()
 
   // BL
   pm.gpioSetFunc(M5PM1_GPIO_NUM_3, M5PM1_GPIO_FUNC_OTHER);
+  pm.gpioSetMode(M5PM1_GPIO_NUM_3, M5PM1_GPIO_MODE_OUTPUT);
   pm.gpioSetDrive(M5PM1_GPIO_NUM_3, M5PM1_GPIO_DRIVE_PUSHPULL);
   pm.setPwmFrequency(5000);
 //  pm.analogWrite(M5PM1_PWM_CH_0, 10);
@@ -92,6 +97,7 @@ void earlyInitVariant()
   // init ip2315
   ioe1.pinMode(M5IOE1_PIN_11, OUTPUT_OPEN_DRAIN);
   ioe1.digitalWrite(M5IOE1_PIN_11, HIGH);
+  delay(2);
   // enable charge
   Wire.beginTransmission(IP2315_ADDR);
   Wire.write(0x01);
@@ -110,10 +116,99 @@ void earlyInitVariant()
 #endif
 }
 
+static bool readIP2315Charging(bool &isCharging)
+{
+    // IP2315 を I2C バスに接続（PYG11 / M5IOE1_PIN_11）
+    ioe1.digitalWrite(M5IOE1_PIN_11, HIGH);
+    delay(2);
+
+    Wire.beginTransmission(IP2315_ADDR);
+    Wire.write(0xC7); // REG_CHG_STAT
+    uint8_t err = Wire.endTransmission(false);
+    if (err != 0) {
+        LOG_DEBUG("IP2315 I2C write error: %d", err);
+        ioe1.digitalWrite(M5IOE1_PIN_11, LOW);
+        return false;
+    }
+
+    uint8_t n = Wire.requestFrom(IP2315_ADDR, (uint8_t)1);
+    if (n < 1) {
+        LOG_DEBUG("IP2315 I2C read error");
+        ioe1.digitalWrite(M5IOE1_PIN_11, LOW);
+        return false;
+    }
+
+    uint8_t status = Wire.read();
+    ioe1.digitalWrite(M5IOE1_PIN_11, LOW);
+
+    // bit7 = charging in progress
+    // 0x82: charging, 0x45: charge complete, 0x00: charge disabled
+    isCharging = (status & 0x80) != 0;
+    LOG_DEBUG("IP2315 REG_CHG_STAT=0x%02X charging=%d", status, isCharging);
+    return true;
+}
+
+static int8_t estimateBatteryPercent(uint16_t vbatMv)
+{
+    if (vbatMv >= 4200)
+        return 100;
+    if (vbatMv <= 3000)
+        return 0;
+    return (int8_t)((vbatMv - 3000) * 100LL / (4200 - 3000));
+}
+
+class M5PM1PowerObserver
+{
+  public:
+    CallbackObserver<M5PM1PowerObserver, const meshtastic::PowerStatus *> observer;
+
+    M5PM1PowerObserver() : observer(this, &M5PM1PowerObserver::onPowerStatus) {}
+
+    int onPowerStatus(const meshtastic::PowerStatus *status)
+    {
+        uint16_t vbatMv = 0;
+        m5pm1_pwr_src_t src = M5PM1_PWR_SRC_UNKNOWN;
+
+        m5pm1_err_t vbatErr = pm.readVbat(&vbatMv);
+        m5pm1_err_t srcErr = pm.getPowerSource(&src);
+
+        bool usbPowered = (src == M5PM1_PWR_SRC_5VIN);
+        bool charging = false;
+        bool chargeKnown = readIP2315Charging(charging);
+
+        int8_t pct = estimateBatteryPercent(vbatMv);
+
+        meshtastic::OptionalBool hasBattery = meshtastic::OptTrue;
+        meshtastic::OptionalBool hasUSB = usbPowered ? meshtastic::OptTrue : meshtastic::OptFalse;
+        meshtastic::OptionalBool isCharging = chargeKnown ? (charging ? meshtastic::OptTrue : meshtastic::OptFalse)
+                                                          : meshtastic::OptUnknown;
+
+        if (srcErr != M5PM1_OK) {
+            LOG_WARN("M5PM1 getPowerSource failed: %d", srcErr);
+            hasUSB = meshtastic::OptUnknown;
+        }
+        if (vbatErr != M5PM1_OK) {
+            LOG_WARN("M5PM1 readVbat failed: %d", vbatErr);
+            hasBattery = meshtastic::OptUnknown;
+            pct = -1;
+        }
+
+        meshtastic::PowerStatus newStatus(hasBattery, hasUSB, isCharging, (int)vbatMv, pct);
+        powerStatus->updateStatus(&newStatus);
+
+        LOG_INFO("Battery update: vbat=%dmV pct=%d%% usb=%d charging=%d", vbatMv, pct, hasUSB, isCharging);
+        return 0;
+    }
+};
+
 void lateInitVariant()
 {
   LOG_INFO("Frontlight test: ON");
-  pm.analogWrite(M5PM1_PWM_CH_0, 50);
+  pm.analogWrite(M5PM1_PWM_CH_0, 30);
+
+  static M5PM1PowerObserver obs;
+  obs.observer.observe(&power->newStatus);
+  obs.onPowerStatus(nullptr);
 }
 
 #endif
