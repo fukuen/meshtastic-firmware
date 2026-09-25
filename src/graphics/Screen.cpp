@@ -617,6 +617,8 @@ Screen::Screen(ScanI2C::DeviceAddress address, meshtastic_Config_DisplayConfig_O
 #elif defined(USE_EINK) && defined(MESHTASTIC_INCLUDE_NICHE_GRAPHICS) && !defined(MESHTASTIC_INCLUDE_INKHUD)
     // NicheGraphics-backed BaseUI E-Ink path. Variant provides setupNicheGraphicsBaseUI() in its nicheGraphics.h.
     dispdev = setupNicheGraphicsBaseUI();
+#elif defined(USE_EINK) && defined(USE_EINK_LGFX)
+    dispdev = new LGFXEInkDisplay(EINK_WIDTH, EINK_HEIGHT);
 #elif defined(USE_EINK) && !defined(USE_EINK_DYNAMICDISPLAY) && !defined(USE_EINK_PARALLELDISPLAY)
     dispdev = new EInkDisplay(address.address, -1, -1, geometry,
                               (address.port == ScanI2C::I2CPort::WIRE1) ? HW_I2C::I2C_TWO : HW_I2C::I2C_ONE);
@@ -902,6 +904,8 @@ void Screen::setup()
         drawLockdownLockScreen(dispdev);
 #if defined(MESHTASTIC_INCLUDE_NICHE_GRAPHICS) && !defined(MESHTASTIC_INCLUDE_INKHUD)
         static_cast<NicheGraphics::BaseUIEInkDisplay *>(dispdev)->forceDisplay();
+#elif defined(USE_EINK_LGFX)
+        static_cast<LGFXEInkDisplay *>(dispdev)->forceDisplay();
 #elif defined(USE_EINK_PARALLELDISPLAY)
         // Parallel-display variants drive refresh through a different path;
         // a bare drawLockdownLockScreen above lands the frame into the
@@ -1065,6 +1069,8 @@ void Screen::forceDisplay(bool forceUiUpdate)
     // Tell EInk class to update the display
 #if defined(MESHTASTIC_INCLUDE_NICHE_GRAPHICS) && !defined(MESHTASTIC_INCLUDE_INKHUD)
     static_cast<NicheGraphics::BaseUIEInkDisplay *>(dispdev)->forceDisplay();
+#elif defined(USE_EINK_LGFX)
+    static_cast<LGFXEInkDisplay *>(dispdev)->forceDisplay();
 #elif defined(USE_EINK_PARALLELDISPLAY)
     static_cast<EInkParallelDisplay *>(dispdev)->forceDisplay();
 #elif defined(USE_EINK)
@@ -1348,6 +1354,8 @@ void Screen::setScreensaverFrames(FrameCallback einkScreensaver)
 
 #if defined(MESHTASTIC_INCLUDE_NICHE_GRAPHICS) && !defined(MESHTASTIC_INCLUDE_INKHUD)
     static_cast<NicheGraphics::BaseUIEInkDisplay *>(dispdev)->forceDisplay(0);
+#elif defined(USE_EINK_LGFX)
+    static_cast<LGFXEInkDisplay *>(dispdev)->forceDisplay(0);
 #elif defined(USE_EINK_PARALLELDISPLAY)
     static_cast<EInkParallelDisplay *>(dispdev)->forceDisplay(0);
 #elif defined(USE_EINK) && !defined(USE_EINK_DYNAMICDISPLAY)

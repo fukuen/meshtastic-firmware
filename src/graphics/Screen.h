@@ -123,6 +123,9 @@ class Screen
 // InkHUD builds keep the legacy includes: their TUs carry InkHUD's own NicheGraphics::Drivers classes,
 // which would collide with graphics/eink/ declarations until InkHUD moves onto the shared layer.
 #include "BaseUIEInkDisplay.h"
+#elif defined(USE_EINK_LGFX)
+// LovyanGFX-backed e-ink stack (M5Stack PaperMono SSD1677).
+#include "LGFXEInkDisplay.h"
 #else
 #include "EInkDisplay2.h"
 #include "EInkDynamicDisplay.h"
