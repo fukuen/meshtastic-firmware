@@ -9,10 +9,22 @@
 #include "Observer.h"
 #include "Power.h"
 #include "PowerStatus.h"
+#include "graphics/Backlight.h"
+#include "mesh/NodeDB.h"
 
 #define M5IOE1_ADDR 0x4F
 #define M5PM1_ADDR 0x6E
 #define IP2315_ADDR 0x75
+
+// Called by device-ui's LGFXDriver when the frontlight should time out (the EPD image
+// itself stays on). Weak hook; the device-ui ships a no-op default.
+extern "C" void meshtasticFrontlight(bool on)
+{
+    if (on)
+        graphics::backlightOn();
+    else
+        graphics::backlightOff();
+}
 
 M5IOE1 ioe1;
 M5PM1 pm;
@@ -68,6 +80,11 @@ void earlyInitVariant()
     delay(10);
     ioe1.digitalWrite(M5IOE1_PIN_5, HIGH); // EPD reset release
     ioe1.digitalWrite(M5IOE1_PIN_6, HIGH);
+
+    // Touch panel EN (FT6336U): power the controller so the MUI can use it.
+    ioe1.pinMode(M5IOE1_PIN_13, OUTPUT);
+    ioe1.setDriveMode(M5IOE1_PIN_13, M5IOE1_DRIVE_PUSHPULL);
+    ioe1.digitalWrite(M5IOE1_PIN_13, HIGH);
 
     // LoRa ANT SW
     ioe1.pinMode(M5IOE1_PIN_2, OUTPUT);
@@ -183,6 +200,14 @@ class M5PM1PowerObserver
 
 void lateInitVariant()
 {
+    // Light the frontlight. Runs on the BaseUI (idempotent with Screen) and the
+    // MUI build, where BaseUI's Screen never initialises the backlight.
+    graphics::backlightInit();
+    if (uiconfig.screen_brightness == 0)
+        graphics::backlightSet(GPIO_BACKLIGHT_ON_LEVEL);
+    else
+        graphics::backlightOn();
+
     static M5PM1PowerObserver obs;
     obs.observer.observe(&power->newStatus);
     obs.onPowerStatus(nullptr);

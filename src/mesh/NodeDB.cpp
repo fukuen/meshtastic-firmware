@@ -86,7 +86,13 @@ EXT_RAM_BSS_ATTR meshtastic_DeviceState devicestate;
 meshtastic_MyNodeInfo &myNodeInfo = devicestate.my_node;
 meshtastic_NodeDatabase nodeDatabase;
 meshtastic_LocalConfig config;
+#ifdef M5STACK_PAPERMONO
+// E-Paper: default to the light theme; the screen timeout only drives the frontlight
+// off (the EPD image itself stays on).
+meshtastic_DeviceUIConfig uiconfig{.screen_brightness = 153, .screen_timeout = 30, .theme = meshtastic_Theme_LIGHT};
+#else
 meshtastic_DeviceUIConfig uiconfig{.screen_brightness = 153, .screen_timeout = 30};
+#endif
 meshtastic_LocalModuleConfig moduleConfig;
 meshtastic_ChannelFile channelFile;
 

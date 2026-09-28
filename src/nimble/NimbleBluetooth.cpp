@@ -27,6 +27,7 @@
 #ifdef ARCH_ESP32
 #include <nvs.h>
 #include <nvs_flash.h>
+#include <esp_heap_caps.h>
 #endif
 
 namespace
@@ -907,6 +908,10 @@ void NimbleBluetooth::setup()
     // NimbleBluetooth::clearBonds();
 
     LOG_INFO("Init NimBLE bluetooth");
+#ifdef ARCH_ESP32
+    LOG_INFO("BLE init heap: free=%u internal=%u psram_free=%u", ESP.getFreeHeap(), heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+#endif
 
     // deinit() latches these teardown guards; clear them so a re-init on the same boot (e.g. an
     // admin disable-bluetooth followed by re-enable) doesn't leave onRead stuck draining or

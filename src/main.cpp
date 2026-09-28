@@ -867,9 +867,15 @@ void setup()
     // Initialize transmit history to persist broadcast throttle timers across reboots
     TransmitHistory::getInstance()->loadFromDisk();
 #if HAS_TFT
+#if defined(MESHTASTIC_MUI_DEFAULT)
+    // Dedicated MUI build: always boot into MeshtasticUI, regardless of the
+    // saved displaymode (which BaseUI may have left as DEFAULT).
+    tftSetup();
+#else
     if (config.display.displaymode == meshtastic_Config_DisplayConfig_DisplayMode_COLOR) {
         tftSetup();
     }
+#endif
 #endif
 
     router = new ReliableRouter();
