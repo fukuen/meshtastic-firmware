@@ -86,6 +86,12 @@ void earlyInitVariant()
     ioe1.setDriveMode(M5IOE1_PIN_13, M5IOE1_DRIVE_PUSHPULL);
     ioe1.digitalWrite(M5IOE1_PIN_13, HIGH);
 
+    // microSD power rail EN (PYG14). Separate from the touch rail (PYG13); the SD
+    // card is mounted over SDIO in FSCommon::setupSDCard().
+    ioe1.pinMode(M5IOE1_PIN_14, OUTPUT);
+    ioe1.setDriveMode(M5IOE1_PIN_14, M5IOE1_DRIVE_PUSHPULL);
+    ioe1.digitalWrite(M5IOE1_PIN_14, HIGH);
+
     // LoRa ANT SW
     ioe1.pinMode(M5IOE1_PIN_2, OUTPUT);
     ioe1.setDriveMode(M5IOE1_PIN_2, M5IOE1_DRIVE_PUSHPULL);

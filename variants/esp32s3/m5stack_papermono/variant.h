@@ -64,5 +64,10 @@
 #define PCA_PIN_EINK_EN 99
 #define GPIO_BACKLIGHT_DEFAULT_ON
 
+// microSD (SDIO, 1-bit) is mounted by device-ui's SDCard::init(), which reads
+// SD_SCLK_PIN/SD_MOSI_PIN/SD_MISO_PIN. Those, HAS_SDCARD and HAS_SD_MMC live in
+// platformio.ini as -D flags: device-ui sources do not include this header, so
+// the symbols must be defined before any include. Power rail: M5IOE1 PYG14 (variant.cpp).
+
 // RTC
 #define RX8130CE_RTC 0x32
